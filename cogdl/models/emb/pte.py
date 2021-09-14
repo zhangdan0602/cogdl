@@ -59,15 +59,9 @@ class PTE(BaseModel):
         self.batch_size = batch_size
         self.init_alpha = alpha
 
-    def forward(self, data):
-        return self.train(data)
-
-    def train(self, data):
-        G = nx.DiGraph()
-        row, col = data.edge_index
-        G.add_edges_from(list(zip(row.numpy(), col.numpy())))
+    def train(self, G, node_type):
         self.G = G
-        self.node_type = data.pos.tolist()
+        self.node_type = node_type
         self.num_node = G.number_of_nodes()
         self.num_edge = G.number_of_edges()
         self.num_sampling_edge = self.walk_length * self.walk_num * self.num_node

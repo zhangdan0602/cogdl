@@ -204,60 +204,61 @@ def early_stopping(log_value, best_value, stopping_step, expected_order="acc", f
 		stopping_step += 1
 
 	if stopping_step >= flag_step:
-		print("Early stopping is trigger at step: {} log:{}".format(flag_step, log_value))
+		print("Early stopping is trigger at step: {}, stop at: {} log:{}".format(flag_step, stopping_step, log_value))
 		should_stop = True
 	else:
 		should_stop = False
 	return best_value, stopping_step, should_stop
 
 
-@register_task("recommendation")
+@register_task("recommendation_archi")
 class Recommendation(BaseTask):
 	@staticmethod
 	def add_args(parser):
-		pass
 		# ===== dataset ===== #
-		# parser.add_argument("--dataset", nargs="?", default="amazon",
-		# 					help="Choose a dataset:[amazon,yelp2018,ali,aminer]")
-		# parser.add_argument(
-		# 	"--data_path", nargs="?", default="data/", help="Input data path."
-		# )
-		#
-		# # ===== train ===== # 
-		# parser.add_argument("--gnn", nargs="?", default="lightgcn",
-		# 					help="Choose a recommender:[lightgcn, ngcf, dgcf, dregn-cf, gcmc]")
-		# parser.add_argument('--epoch', type=int, default=1000, help='number of epochs')
-		# parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
-		# parser.add_argument('--test_batch_size', type=int, default=2048, help='batch size in evaluation phase')
-		# parser.add_argument('--dim', type=int, default=64, help='embedding size')
-		# parser.add_argument('--l2', type=float, default=1e-4, help='l2 regularization weight, 1e-5 for NGCF')
-		# parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
-		# parser.add_argument("--mess_dropout", type=bool, default=False, help="consider mess dropout or not")
-		# parser.add_argument("--mess_dropout_rate", type=float, default=0.1, help="ratio of mess dropout")
-		# parser.add_argument("--edge_dropout", type=bool, default=False, help="consider edge dropout or not")
-		# parser.add_argument("--edge_dropout_rate", type=float, default=0.1, help="ratio of edge sampling")
-		# parser.add_argument("--batch_test_flag", type=bool, default=True, help="use gpu or not")
-		#
-		# parser.add_argument("--ns", type=str, default='rns', help="rns,mixgcf")
-		# parser.add_argument("--K", type=int, default=1, help="number of negative in K-pair loss")
-		#
-		# parser.add_argument("--n_negs", type=int, default=1, help="number of candidate negative")
-		# parser.add_argument("--pool", type=str, default='concat', help="[concat, mean, sum, final]")
-		#
-		# parser.add_argument("--cuda", type=bool, default=True, help="use gpu or not")
-		# parser.add_argument("--gpu_id", type=int, default=2, help="gpu id")
-		# parser.add_argument('--Ks', nargs='?', default='[20, 50]',
-		# 					help='Output sizes of every layer')
-		# parser.add_argument('--test_flag', nargs='?', default='part',
-		# 					help='Specify the test type from {part, full}, indicating whether the reference is done in mini-batch')
-		#
-		# parser.add_argument("--context_hops", type=int, default=3, help="hop")
-		#
-		# # ===== save model ===== #
-		# parser.add_argument("--save", type=bool, default=False, help="save model or not")
-		# parser.add_argument(
-		# 	"--out_dir", type=str, default="./weights/", help="output directory for model"
-		# )
+		parser.add_argument("--dataset", nargs="?", default="amazon",
+							help="Choose a dataset:[amazon,yelp2018,ali,aminer]")
+		parser.add_argument(
+			"--data_path", nargs="?", default="data/", help="Input data path."
+		)
+
+		# ===== train ===== # 
+		parser.add_argument("--gnn", nargs="?", default="lightgcn",
+							help="Choose a recommender:[lightgcn, ngcf, dgcf, dregn-cf, gcmc, agcn]")
+		parser.add_argument('--epoch', type=int, default=1000, help='number of epochs')
+		parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
+		parser.add_argument('--test_batch_size', type=int, default=2048, help='batch size in evaluation phase')
+		parser.add_argument('--dim', type=int, default=64, help='embedding size')
+		parser.add_argument('--l2', type=float, default=1e-4, help='l2 regularization weight, 1e-5 for NGCF')
+		parser.add_argument('--lr', type=float, default=1e-4, help='learning rate')
+		parser.add_argument("--mess_dropout", type=bool, default=False, help="consider mess dropout or not")
+		parser.add_argument("--mess_dropout_rate", type=float, default=0.1, help="ratio of mess dropout")
+		parser.add_argument("--edge_dropout", type=bool, default=False, help="consider edge dropout or not")
+		parser.add_argument("--edge_dropout_rate", type=float, default=0.1, help="ratio of edge sampling")
+		parser.add_argument("--batch_test_flag", type=bool, default=True, help="use gpu or not")
+
+		parser.add_argument("--ns", type=str, default='rns', help="rns,mixgcf")
+		parser.add_argument("--K", type=int, default=1, help="number of negative in K-pair loss")
+
+		parser.add_argument("--n_negs", type=int, default=1, help="number of candidate negative")
+		parser.add_argument("--pool", type=str, default='concat', help="[concat, mean, sum, final]")
+
+		parser.add_argument("--cuda", type=bool, default=True, help="use gpu or not")
+		parser.add_argument("--gpu_id", type=int, default=2, help="gpu id")
+		parser.add_argument('--Ks', nargs='?', default='[20]', help='Output sizes of every layer')
+		parser.add_argument('--test_flag', nargs='?', default='part',
+							help='Specify the test type from {part, full}, indicating whether the reference is done in mini-batch')
+
+		parser.add_argument("--context_hops", type=int, default=3, help="hop")
+
+		# ===== test ===== #
+		parser.add_argument("--train_method", type=str, default='offline', help="[init, offline, nearline]")
+		parser.add_argument("--u_ids", default='[0]', help="test u_id")
+		# ===== save model ===== #
+		parser.add_argument("--save", type=bool, default=True, help="save model or not")
+		parser.add_argument(
+			"--out_dir", type=str, default="./weights", help="output directory for model"
+		)
 
 	def __init__(self, args, dataset=None, model=None):
 		super(Recommendation, self).__init__(args)
@@ -284,9 +285,10 @@ class Recommendation(BaseTask):
 		self.out_dir = args.out_dir
 		self.Ks = eval(args.Ks)
 		self.K = args.K
+		self.u_ids = eval(args.u_ids)
 		self.num_workers = mp.cpu_count() // 2
 		self.gnn = args.gnn
-
+		self.train_method = args.train_method
 		"""build dataset"""
 		dataset = build_dataset(args) if dataset is None else dataset
 		self.data = dataset[0]
@@ -300,6 +302,7 @@ class Recommendation(BaseTask):
 		args.adj_mat = self.data.norm_mat
 		self.dataset_name = args.dataset
 		args.device = self.device
+		self.u_id = eval(args.u_ids)
 		if self.gnn == 'dgcf':
 			# args.all_h_list = list(args.adj_mat.row)
 			# args.all_t_list = list(args.adj_mat.col)
@@ -318,8 +321,20 @@ class Recommendation(BaseTask):
 		self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
 
 	def train(self, unittest=False):
-		cur_best_pre_0, stopping_step = 0, 0
+		if self.train_method == "init":
+			res = self.init_train(unittest)
+			return res
+		elif self.train_method == "offline":
+			res = self.offline_train()
+			return res
+		elif self.train_method == "nearline":
+			res = self.nearline_predict()
+			return res
+
+	def init_train(self, unittest=False):
+		cur_best_pre_0, stopping_step, best_value, best_epoch = 0, 0, 0, 0
 		print("start training ...", datetime.datetime.now())
+		res = {}
 		for epoch in range(self.epoch):
 			# shuffle training data
 			# print("\nepoch: ", epoch)
@@ -331,14 +346,12 @@ class Recommendation(BaseTask):
 			"""training"""
 			self.model.train()
 			loss, s = 0, 0
-			hits = 0
 			train_s_t = time()
-			loss = self._train_step(loss, s, train_cf, train_cf_)
+			loss, s = self._train_step(loss, s, train_cf, train_cf_)
 			train_e_t = time()
 			# print('loss:', loss.item())
 			if epoch % 5 == 0:
 				"""testing"""
-
 				train_res = PrettyTable()
 				train_res.field_names = ["Epoch", "training time(s)", "tesing time(s)", "Loss", "recall", "ndcg",
 										 "precision", "hit_ratio"]
@@ -369,17 +382,96 @@ class Recommendation(BaseTask):
 																			stopping_step,
 																			expected_order='acc',
 																			flag_step=10)
-				if should_stop:
-					break
 
 				"""save weight"""
 				if valid_ret['recall'][0] == cur_best_pre_0 and self.save:
-					torch.save(self.model.state_dict(), self.out_dir + + '/' + self.dataset_name + '/model_' + str(cur_best_pre_0)+ '.ckpt')
-
+					best_epoch = epoch
+					best_value = cur_best_pre_0
+					res = {"recall": valid_ret["recall"][0], "ndcg": valid_ret["ndcg"][0],
+						   "precision": valid_ret["precision"][0], "hit_ratio": valid_ret["hit_ratio"][0]}
+					day = datetime.datetime.today()
+					print(day, type(day))
+					# dir = os.getcwd() + self.out_dir + self.dataset_name
+					if not os.path.exists(self.out_dir):
+						os.mkdir(self.out_dir)
+					torch.save(self.model.state_dict(),
+							   self.out_dir + ('/Epoch-%d-%f.pt' % (epoch, cur_best_pre_0)))
+				if should_stop:
+					break
 			else:
 				# logging.info('training loss at epoch %d: %f' % (epoch, loss.item()))
 				print('using time %.4fs, training loss at epoch %d: %.4f' % (train_e_t - train_s_t, epoch, loss.item()))
-		print('early stopping at %d, recall@20:%.4f' % (epoch, cur_best_pre_0))
+		print('early stopping at %d, recall@20:%.4f, best epoch: %d' % (best_epoch, cur_best_pre_0, best_epoch))
+		return res
+
+	def offline_train(self):
+		train_s = time()
+		loss, s = 0, 0
+		print(self.data.n_params['n_items'])
+		for epoch in range(self.epoch):
+			# shuffle training data
+			train_s_t = time()
+			train_cf = torch.LongTensor(np.array([[cf[0], cf[1]] for cf in self.data.train_cf], np.int32))
+			train_cf_ = train_cf
+			index = np.arange(len(train_cf_))
+			# np.random.shuffle(index)
+			train_cf_ = train_cf_[index].to(self.device)
+			"""training"""
+			self.model.train()
+			loss, s = self._train_step(loss, s, train_cf, train_cf_)
+			train_e_t = time()
+			print('train time: ', train_e_t - train_s_t, 'loss: ', loss.item())
+		train_e = time()
+		last_day = datetime.datetime.today().date()
+		if not os.path.exists(self.out_dir):
+			os.mkdir(self.out_dir)
+		torch.save(self.model.state_dict(),
+				   self.out_dir + '/' + str(last_day) + '.pt')
+		train_res = {"Epoch": self.epoch, "training time(s)": train_e - train_s, "loss": loss.item()}
+		return train_res
+
+	def nearline_predict(self):
+		result = {}
+		today = datetime.date.today()
+		load_pt = self.out_dir + '/' + str(today) + '.pt'
+		if not os.path.exists(load_pt):
+			last_day = datetime.date.today() - datetime.timedelta(days=1)
+			load_pt = self.out_dir + '/' + str(last_day) + '.pt'
+		print(load_pt)
+		pt = torch.load(load_pt)
+		self.model.load_state_dict(pt)
+		self.model.eval()
+		n_items = self.data.n_params['n_items']
+		user_gcn_emb, item_gcn_emb = self.model.generate()
+		user_batch = torch.LongTensor(np.array([self.u_ids])).to(self.device)
+		u_g_embeddings = user_gcn_emb[user_batch]
+		item_batch = torch.LongTensor(np.array(range(0, n_items))).view(n_items, -1).squeeze().to(self.device)
+		i_g_embddings = item_gcn_emb[item_batch]
+		rate_batch = self.model.rating(u_g_embeddings, i_g_embddings.squeeze()).detach().cpu()
+		train_user_set = self.data.user_dict["train_user_set"]
+
+		def ranklist_by_sorted(u_id, test_items, rating, Ks):
+			item_score = {}
+			for i in test_items:
+				item_score[i] = rating[i]
+			K_max = max(Ks)
+			K_max_item_score = heapq.nlargest(K_max, item_score, key=item_score.get)
+			# r = []
+			one_res = {}
+			for i in K_max_item_score:
+				if i in test_items:
+					one_res[i] = rating[i].item()
+				# r.append(i)
+			return one_res
+
+		for rate, u_id in zip(rate_batch.squeeze(), self.u_ids):
+			training_items = train_user_set[u_id] if u_id in train_user_set else []
+			all_items = set(range(0, self.n_items))
+			test_items = list(all_items - set(training_items))
+			one_res = ranklist_by_sorted(u_id, test_items, rate, self.Ks)
+			if u_id not in result:
+				result[u_id] = one_res
+		return result
 
 	def _train_step(self, loss, s, train_cf, train_cf_):
 		while s + self.batch_size <= len(train_cf):
@@ -400,7 +492,7 @@ class Recommendation(BaseTask):
 			loss += batch_loss
 			s += self.batch_size
 		print('loss:', loss.item())
-		return loss
+		return loss, s
 
 	def _test_step(self, split="val", unittest=False):
 		result = {'precision': np.zeros(len(self.Ks)),
@@ -417,7 +509,7 @@ class Recommendation(BaseTask):
 			test_user_set = self.data.user_dict['valid_user_set']
 			if test_user_set is None:
 				test_user_set = self.data.user_dict['test_user_set']
-		print(len(test_user_set))
+		# print(len(test_user_set))
 		pool = mp.Pool(self.num_workers)
 
 		u_batch_size = self.batch_size
@@ -490,7 +582,7 @@ class Recommendation(BaseTask):
 
 		assert count == n_test_users
 		pool.close()
-		print(result)
+		# print(result)
 		return result
 
 	def test_one_user(self, x):

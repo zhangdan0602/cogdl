@@ -78,6 +78,21 @@ unsupervised_node_classification:
     - youtube-ne
     - dblp-ne
     - flickr-ne
+  - model:
+    - unsup_graphsage
+    - dgi
+    - mvgrl
+    - grace
+    dataset:
+    - cora
+    - citeseer
+    - pubmed
+    - reddit
+    - ppi
+    - ppi-large
+    - flickr
+    - yelp
+    - amazon-s
 graph_classification:
   - model:
     - gin
@@ -186,11 +201,13 @@ multiplex_node_classification:
 heterogeneous_node_classification:
   - model:
     - gtn
-    - han
     dataset:
     - gtn-dblp
     - gtn-acm
     - gtn-imdb
+  - model:
+    - han
+    dataset:
     - han-dblp
     - han-acm
     - han-imdb
@@ -243,7 +260,31 @@ oag_supervised_classification:
 recommendation:
   - model:
     - lightgcn
+    - lr_gccf
+    - ngcf
+    - Disentangled_gcf
+    - dregn-cf
+    - gcmc
+    - agcn
     dataset:
     - yelp2018
+    - aminer
+    - ali
+    - amazon-rec
+recommendation_archi:
+  - model:
+    - lightgcn
+    - lr_gccf
+    - ngcf
+    - Disentangled_gcf
+    - dregn-cf
+    - gcmc
+    - agcn
+    dataset:
+    - yelp2018
+    - aminer
+    - aminer_nearline
+    - aminer_v3
+    - aminer_v3_nearline
     - ali
     - amazon-rec

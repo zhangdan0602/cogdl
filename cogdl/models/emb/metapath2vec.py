@@ -64,15 +64,9 @@ class Metapath2vec(BaseModel):
         self.schema = schema
         self.node_type = None
 
-    def forward(self, data):
-        return self.train(data)
-
-    def train(self, data):
-        G = nx.DiGraph()
-        row, col = data.edge_index
-        G.add_edges_from(list(zip(row.numpy(), col.numpy())))
+    def train(self, G, node_type):
         self.G = G
-        self.node_type = [str(a) for a in data.pos.tolist()]
+        self.node_type = [str(a) for a in node_type]
         walks = self._simulate_walks(self.walk_length, self.walk_num, self.schema)
         walks = [[str(node) for node in walk] for walk in walks]
         model = Word2Vec(

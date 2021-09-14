@@ -69,4 +69,5 @@ SUPPORTED_TASKS = {
     "unsupervised_graph_classification": "cogdl.tasks.unsupervised_graph_classification",
     "unsupervised_node_classification": "cogdl.tasks.unsupervised_node_classification",
     "recommendation": "cogdl.tasks.recommendation",
+    "recommendation_archi": "cogdl.tasks.recommendation_archi",
 }

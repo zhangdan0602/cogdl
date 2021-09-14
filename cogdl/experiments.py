@@ -1,4 +1,5 @@
 import copy
+import datetime
 import itertools
 import os
 from collections import defaultdict, namedtuple
@@ -160,8 +161,8 @@ def raw_experiment(task: str, dataset, model, **kwargs):
         results_dict[variant[:-1]].append(result)
 
     tablefmt = kwargs["tablefmt"] if "tablefmt" in kwargs else "github"
-    output_results(results_dict, tablefmt)
-
+    # output_results(results_dict, tablefmt)
+    print('end time： ', datetime.datetime.now())
     return results_dict
 
 

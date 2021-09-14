@@ -66,6 +66,16 @@ def set_default_wrapper_config():
         "graph2vec",
     ]
 
+    gnn_recommendation_models = [
+        "ngcf",
+        "lightgcn",
+        "gcmc",
+        "agcn",
+        "dregn-cf",
+        "lr-gccf",
+        "imp-gcn"
+    ]
+
     node_classification_wrappers = dict()
     for item in node_classification_models:
         node_classification_wrappers[item] = {"mw": "node_classification_mw", "dw": "node_classification_dw"}
@@ -97,11 +107,16 @@ def set_default_wrapper_config():
     for item in graph_embedding_models:
         graph_embedding_wrappers[item] = {"mw": "graph_embedding_mw", "dw": "graph_embedding_dw"}
 
+    gnn_recommendation_wrappers = dict()
+    for item in gnn_recommendation_models:
+        gnn_recommendation_wrappers[item] = {"mw": "gnn_recommendation_mw", "dw":"gnn_recommendation_dw"}
+
     merged = dict()
     merged.update(node_classification_wrappers)
     merged.update(graph_embedding_wrappers)
     merged.update(graph_embedding_wrappers)
     merged.update(network_embedding_wrappers)
+    merged.update(gnn_recommendation_wrappers)
     return merged
 
 

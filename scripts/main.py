@@ -11,7 +11,6 @@ from cogdl.wrappers import fetch_model_wrapper, fetch_data_wrapper
 from cogdl.utils import set_random_seed, tabulate_results
 from tabulate import tabulate
 
-
 def examine_link_prediction(args, dataset):
     if "link_prediction" in args.mw:
         args.num_entities = dataset.data.num_nodes
@@ -24,16 +23,28 @@ def examine_link_prediction(args, dataset):
     return args
 
 
+def add_values_to_gnn_rec_args(args, dataset):
+    args.data = dataset[0]
+    args.data.apply(lambda x: x.to(args.devices))
+    args.n_users = args.data.n_params["n_users"]
+    args.n_items = args.data.n_params["n_items"]
+    args.train_user_set = args.data.user_dict['train_user_set']
+    args.adj_mat = args.data.norm_mat
+    if args.gnn == "dgcf":
+        # args.all_h_list = list(args.adj_mat.row)
+        # args.all_t_list = list(args.adj_mat.col)
+        args.n_train = args.data.n_params["n_train"]
+    if args.gnn == 'dregn-cf':
+        args.u_freqs = args.data.user_dict["u_freqs"]
+        args.u_freqs = args.data.user_dict["u_freqs"]
+    return args
+
+
 def raw_experiment(args, model_wrapper_args, data_wrapper_args):
     # setup dataset and specify `num_features` and `num_classes` for model
     args.monitor = "val_acc"
     dataset = build_dataset(args)
     args.num_features = dataset.num_features
-    args.num_classes = dataset.num_classes
-    if hasattr(dataset, "num_nodes"):
-        args.num_nodes = dataset.num_nodes
-    if hasattr(dataset, "num_edge"):
-        args.num_edge = dataset.num_edge
     if hasattr(args, "unsup") and args.unsup:
         args.num_classes = args.hidden_size
     else:
@@ -58,6 +69,9 @@ def raw_experiment(args, model_wrapper_args, data_wrapper_args):
             setattr(model_wrapper_args, key, getattr(args, key))
 
     args = examine_link_prediction(args, dataset)
+
+    if args.mw == "gnn_recommendation_mw":
+        args = add_values_to_gnn_rec_args(args, dataset)
 
     # setup model
     model = build_model(args)

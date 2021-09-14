@@ -50,10 +50,20 @@ class HAN(BaseModel):
         self.cross_entropy_loss = nn.CrossEntropyLoss()
         self.linear = nn.Linear(self.w_out, self.num_class)
 
-    def forward(self, graph):
+    def forward(self, graph, target_x, target):
         X = graph.x
         for i in range(self.num_layers):
             X = self.layers[i](graph, X)
 
-        out = self.linear(X)
-        return out
+        y = self.linear(X[target_x])
+        loss = self.cross_entropy_loss(y, target)
+        return loss, y
+
+    def loss(self, data):
+        loss, y = self.forward(data, data.train_node, data.train_target)
+        return loss
+
+    def evaluate(self, data, nodes, targets):
+        loss, y = self.forward(data, nodes, targets)
+        f1 = accuracy(y, targets)
+        return loss.item(), f1

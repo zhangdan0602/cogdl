@@ -1,5 +1,5 @@
 import os.path as osp
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 import numpy as np
 import scipy.sparse as sp
@@ -12,7 +12,7 @@ from . import register_dataset
 
 
 def read_cf_amazon(file_name):
-    return np.loadtxt(file_name, dtype=np.int32)  # [u_id, i_id]
+	return np.loadtxt(file_name, dtype=np.int32)  # [u_id, i_id]
 
 
 def read_cf_yelp2018(file_name):
@@ -29,172 +29,279 @@ def read_cf_yelp2018(file_name):
 
 
 def statistics(dataset, train_data, valid_data, test_data):
-    n_users = max(max(train_data[:, 0]), max(valid_data[:, 0]), max(test_data[:, 0])) + 1
-    n_items = max(max(train_data[:, 1]), max(valid_data[:, 1]), max(test_data[:, 1])) + 1
+	if dataset == "aminer_nearline":
+		n_users = max(train_data[:, 0]) + 1
+		n_items = max(train_data[:, 1]) + 1
+	else:
+		n_users = max(max(train_data[:, 0]), max(valid_data[:, 0]), max(test_data[:, 0])) + 1
+		n_items = max(max(train_data[:, 1]), max(valid_data[:, 1]), max(test_data[:, 1])) + 1
+	n_train = 0
+	if dataset == "ali" or dataset == "amazon-rec":
+		n_items -= n_users
+		# remap [n_users, n_users+n_items] to [0, n_items]
+		train_data[:, 1] -= n_users
+		valid_data[:, 1] -= n_users
+		test_data[:, 1] -= n_users
 
-    if dataset in ["ali", "amazon-rec"]:
-        n_items -= n_users
-        # remap [n_users, n_users+n_items] to [0, n_items]
-        train_data[:, 1] -= n_users
-        valid_data[:, 1] -= n_users
-        test_data[:, 1] -= n_users
+	train_user_set = defaultdict(list)
+	train_item_set = defaultdict(list)
+	test_user_set = defaultdict(list)
+	test_item_set = defaultdict(list)
+	valid_user_set = defaultdict(list)
+	valid_item_set = defaultdict(list)
 
-    train_user_set = defaultdict(list)
-    test_user_set = defaultdict(list)
-    valid_user_set = defaultdict(list)
+	for u_id, i_id in train_data:
+		train_user_set[int(u_id)].append(int(i_id))
+		train_item_set[int(i_id)].append(int(u_id))
+		n_train += 1
+	for u_id, i_id in test_data:
+		test_user_set[int(u_id)].append(int(i_id))
+		test_item_set[int(i_id)].append(int(u_id))
+	for u_id, i_id in valid_data:
+		valid_user_set[int(u_id)].append(int(i_id))
+		valid_item_set[int(i_id)].append(int(u_id))
 
-    for u_id, i_id in train_data:
-        train_user_set[int(u_id)].append(int(i_id))
-    for u_id, i_id in test_data:
-        test_user_set[int(u_id)].append(int(i_id))
-    for u_id, i_id in valid_data:
-        valid_user_set[int(u_id)].append(int(i_id))
-
-    return n_users, n_items, train_user_set, valid_user_set, test_user_set
+	return n_users, n_items, n_train, train_user_set, train_item_set, valid_user_set, valid_item_set, test_user_set, test_item_set
 
 
 def build_sparse_graph(data_cf, n_users, n_items):
-    def _bi_norm_lap(adj):
-        # D^{-1/2}AD^{-1/2}
-        rowsum = np.array(adj.sum(1))
+	def _bi_norm_lap(adj):
+		# D^{-1/2}AD^{-1/2}
+		rowsum = np.array(adj.sum(1))
 
-        d_inv_sqrt = np.power(rowsum, -0.5).flatten()
-        d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0
-        d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
+		d_inv_sqrt = np.power(rowsum, -0.5).flatten()
+		d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.0
+		d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
 
-        bi_lap = d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt)
-        return bi_lap.tocoo()
+		bi_lap = d_mat_inv_sqrt.dot(adj).dot(d_mat_inv_sqrt)
+		return bi_lap.tocoo()
 
-    def _si_norm_lap(adj):
-        # D^{-1}A
-        rowsum = np.array(adj.sum(1))
+	def _si_norm_lap(adj):
+		# D^{-1}A
+		rowsum = np.array(adj.sum(1))
 
-        d_inv = np.power(rowsum, -1).flatten()
-        d_inv[np.isinf(d_inv)] = 0.0
-        d_mat_inv = sp.diags(d_inv)
+		d_inv = np.power(rowsum, -1).flatten()
+		d_inv[np.isinf(d_inv)] = 0.0
+		d_mat_inv = sp.diags(d_inv)
 
-        norm_adj = d_mat_inv.dot(adj)
-        return norm_adj.tocoo()
+		norm_adj = d_mat_inv.dot(adj)
+		return norm_adj.tocoo()
 
-    cf = data_cf.copy()
-    cf[:, 1] = cf[:, 1] + n_users  # [0, n_items) -> [n_users, n_users+n_items)
-    cf_ = cf.copy()
-    cf_[:, 0], cf_[:, 1] = cf[:, 1], cf[:, 0]  # user->item, item->user
+	cf = data_cf.copy()
+	cf[:, 1] = cf[:, 1] + n_users  # [0, n_items) -> [n_users, n_users+n_items)
+	cf_ = cf.copy()
+	cf_[:, 0], cf_[:, 1] = cf[:, 1], cf[:, 0]  # user->item, item->user
 
-    cf_ = np.concatenate([cf, cf_], axis=0)  # [[0, R], [R^T, 0]]
+	cf_ = np.concatenate([cf, cf_], axis=0)  # [[0, R], [R^T, 0]]
 
-    vals = [1.0] * len(cf_)
-    mat = sp.coo_matrix((vals, (cf_[:, 0], cf_[:, 1])), shape=(n_users + n_items, n_users + n_items))
-    return _bi_norm_lap(mat)
-
-
-def build_recommendation_data(dataset, train_cf, valid_cf, test_cf):
-    n_users, n_items, train_user_set, valid_user_set, test_user_set = statistics(dataset, train_cf, valid_cf, test_cf)
-
-    print("building the adj mat ...")
-    norm_mat = build_sparse_graph(train_cf, n_users, n_items)
-
-    n_params = {
-        "n_users": int(n_users),
-        "n_items": int(n_items),
-    }
-    user_dict = {
-        "train_user_set": train_user_set,
-        "valid_user_set": valid_user_set if dataset != "yelp2018" else None,
-        "test_user_set": test_user_set,
-    }
-
-    print("loading done.")
-    data = Graph()
-    data.train_cf = train_cf
-    data.user_dict = user_dict
-    data.n_params = n_params
-    data.norm_mat = norm_mat
-
-    return data
+	vals = [1.0] * len(cf_)
+	mat = sp.coo_matrix((vals, (cf_[:, 0], cf_[:, 1])), shape=(n_users + n_items, n_users + n_items))
+	return _bi_norm_lap(mat)
 
 
 def read_recommendation_data(data_path, dataset):
-    directory = data_path + "/"
+	print('data_path:', data_path)
+	datasets = ["yelp2018", "aminer", "aminer_nearline", "aminer_v3", "aminer_v3_nearline"]
+	if dataset in datasets:
+		directory = data_path + "/" + dataset + "/"
+		read_cf = read_cf_yelp2018
+	else:
+		directory = data_path + "/"
+		read_cf = read_cf_amazon
 
-    if dataset == "yelp2018":
-        read_cf = read_cf_yelp2018
-    else:
-        read_cf = read_cf_amazon
+	print("reading train and test user-item set ...")
+	train_cf = read_cf(directory + "train.txt")
+	test_cf = read_cf(directory + "test.txt")
+	if dataset in datasets:
+		valid_cf = test_cf
+	else:
+		valid_cf = read_cf(directory + "valid.txt")
+	# if dataset != "yelp2018":
+	#     valid_cf = read_cf(directory + "valid.txt")
+	# else:
+	#     valid_cf = test_cf
+	n_users, n_items, n_train, train_user_set, train_item_set, valid_user_set, valid_item_set, test_user_set, test_item_set = statistics(
+		dataset, train_cf, valid_cf, test_cf)
 
-    print("reading train and test user-item set ...")
-    train_cf = read_cf(directory + "train.txt")
-    test_cf = read_cf(directory + "test.txt")
-    if dataset != "yelp2018":
-        valid_cf = read_cf(directory + "valid.txt")
-    else:
-        valid_cf = test_cf
-    data = build_recommendation_data(dataset, train_cf, valid_cf, test_cf)
+	print("building the adj mat ...")
+	norm_mat = build_sparse_graph(train_cf, n_users, n_items)
 
-    return data
+	n_params = {
+		"n_users": int(n_users),
+		"n_items": int(n_items),
+		"n_train": int(n_train),
+	}
+
+	# user_item_matrix, d_i_train, d_j_train = readTrainSparseMatrix(train_user_set, train_item_set, True, int(n_users), int(n_items))
+	# print(type(user_item_matrix))
+	# item_user_matrix, _, _ = readTrainSparseMatrix(train_user_set, train_item_set, False, int(n_users), int(n_items))
+	# print(type(item_user_matrix))
+	train_users = []
+	for index, u in enumerate(train_user_set.keys()):
+		train_users.append([[u] * len(train_user_set[u]), train_user_set[u]])
+	train_users_data = np.concatenate(train_users, 1).T
+	train_users_data = train_users_data[:, 0]
+	user_freq = Counter(train_users_data)
+	u_freqs = np.array(list(user_freq.values()))
+
+	user_dict = {
+		# "d_i_train": d_i_train,
+		# "d_j_train": d_j_train,
+		# "user_item_matrix": user_item_matrix,
+		# "item_user_matrix": item_user_matrix,
+		"train_user_set": train_user_set,
+		"train_item_set": train_item_set,
+		"valid_user_set": valid_user_set if dataset != "yelp2018" or "aminer" or "aminer_nearline" else None,
+		"valid_item_set": valid_item_set if dataset != "yelp2018" or "aminer" or "aminer_nearline" else None,
+		"test_user_set": test_user_set,
+		"test_item_set": test_item_set,
+		"u_freqs": u_freqs,
+	}
+
+	print("loading done.")
+	data = Graph()
+	data.train_cf = train_cf
+	data.user_dict = user_dict
+	data.n_params = n_params
+	data.norm_mat = norm_mat
+
+	return data
+
+
+def readD(set_matrix, num_):
+	user_d = []
+	for i in range(num_):
+		len_set = 1.0 / (len(set_matrix[i]) + 1)
+		user_d.append(len_set)
+	return user_d
+
+
+def readTrainSparseMatrix(train_user_set, train_item_set, is_user, n_users, n_items):
+	user_items_matrix_i = []
+	user_items_matrix_v = []
+	if is_user:
+		d_i = readD(train_user_set, n_users)
+		d_j = readD(train_item_set, n_items)
+		for i in train_user_set:
+			for j in train_user_set[i]:
+				# if j < 0:
+				# 	j += 31668
+				user_items_matrix_i.append([i, j])
+				d_i_j = np.sqrt(d_i[i] * d_j[j])
+				# 1/sqrt((d_i+1)(d_j+1))
+				user_items_matrix_v.append(d_i_j)  # (1./len_set)
+		user_items_matrix_i = torch.cuda.LongTensor(user_items_matrix_i)
+		user_items_matrix_v = torch.cuda.FloatTensor(user_items_matrix_v)
+		return torch.sparse.FloatTensor(user_items_matrix_i.t(), user_items_matrix_v), d_i, d_j
+	else:
+		d_i = readD(train_item_set, n_items)
+		d_j = readD(train_user_set, n_users)
+		for i in train_item_set:
+			for j in train_item_set[i]:
+				# if j < 0:
+				# 	j += 31668
+				user_items_matrix_i.append([i, j])
+				d_i_j = np.sqrt(d_i[i] * d_j[j])
+				# 1/sqrt((d_i+1)(d_j+1))
+				user_items_matrix_v.append(d_i_j)  # (1./len_set)
+		user_items_matrix_i = torch.cuda.LongTensor(user_items_matrix_i)
+		user_items_matrix_v = torch.cuda.FloatTensor(user_items_matrix_v)
+		return torch.sparse.FloatTensor(user_items_matrix_i.t(), user_items_matrix_v), d_i, d_j
 
 
 class RecDataset(Dataset):
-    r"""The recommendation datasets "Amazon", "Yelp2018" and "Ali" from the
-    `"MixGCF: An Improved Training Method for Graph Neural Network-based Recommender Systems"
-    <https://keg.cs.tsinghua.edu.cn/jietang/publications/KDD21-Huang-et-al-MixGCF.pdf>`_ paper.
-    """
+	r"""The gnn_recommendation datasets "Amazon", "Yelp2018" and "Ali" from the
+	`"MixGCF: An Improved Training Method for Graph Neural Network-based Recommender Systems"
+	<https://keg.cs.tsinghua.edu.cn/jietang/publications/KDD21-Huang-et-al-MixGCF.pdf>`_ paper.
+	"""
 
-    url = "https://cloud.tsinghua.edu.cn/d/ddbbff157971449eb163/files/?p=%2F"
+	url = "https://cloud.tsinghua.edu.cn/d/ddbbff157971449eb163/files/?p=%2F"
 
-    def __init__(self, root, name):
-        self.name = name
+	def __init__(self, root, name):
+		self.name = name
 
-        super(RecDataset, self).__init__(root)
-        self.data = torch.load(self.processed_paths[0])
+		super(RecDataset, self).__init__(root)
+		self.data = torch.load(self.processed_paths[0])
 
-        self.raw_dir = osp.join(self.root, self.name, "raw")
-        self.processed_dir = osp.join(self.root, self.name, "processed")
+		self.raw_dir = osp.join(self.root, self.name, "raw")
+		self.processed_dir = osp.join(self.root, self.name, "processed")
 
-    @property
-    def raw_file_names(self):
-        names = ["train.txt", "valid.txt", "test.txt"]
-        return names
+	@property
+	def raw_file_names(self):
+		names = ["train.txt", "valid.txt", "test.txt"]
+		return names
 
-    @property
-    def processed_file_names(self):
-        return "data.pt"
+	@property
+	def processed_file_names(self):
+		return "data.pt"
 
-    def download(self):
-        fname = "{}.zip".format(self.name.lower())
-        download_url("{}{}.zip&dl=1".format(self.url, self.name.lower()), self.raw_dir, fname)
-        untar(self.raw_dir, fname)
+	def download(self):
+		fname = "{}.zip".format(self.name.lower())
+		# download_url("{}{}.zip&dl=1".format(self.url, self.name.lower()), self.raw_dir, fname)
+		# untar(self.raw_dir, fname)
 
-    def process(self):
-        data = read_recommendation_data(self.raw_dir, self.name)
-        torch.save(data, self.processed_paths[0])
+	def process(self):
+		data = read_recommendation_data(self.raw_dir, self.name)
+		torch.save(data, self.processed_paths[0])
 
-    def get(self, idx):
-        return self.data
+	def get(self, idx):
+		return self.data
 
-    def __repr__(self):
-        return "{}()".format(self.name)
+	def __repr__(self):
+		return "{}()".format(self.name)
 
 
 @register_dataset("yelp2018")
 class Yelp2018Dataset(RecDataset):
-    def __init__(self, data_path="data"):
-        dataset = "yelp2018"
-        path = osp.join(data_path, dataset)
-        super(Yelp2018Dataset, self).__init__(path, dataset)
+	def __init__(self, data_path="data"):
+		dataset = "yelp2018"
+		path = osp.join(data_path, dataset)
+		super(Yelp2018Dataset, self).__init__(path, dataset)
 
 
 @register_dataset("ali")
 class AliDataset(RecDataset):
-    def __init__(self, data_path="data"):
-        dataset = "ali"
-        path = osp.join(data_path, dataset)
-        super(AliDataset, self).__init__(path, dataset)
+	def __init__(self, data_path="data"):
+		dataset = "ali"
+		path = osp.join(data_path, dataset)
+		super(AliDataset, self).__init__(path, dataset)
 
 
 @register_dataset("amazon-rec")
 class AmazonRecDataset(RecDataset):
-    def __init__(self, data_path="data"):
-        dataset = "amazon-rec"
-        path = osp.join(data_path, dataset)
-        super(AmazonRecDataset, self).__init__(path, dataset)
+	def __init__(self, data_path="data"):
+		dataset = "amazon-rec"
+		path = osp.join(data_path, dataset)
+		super(AmazonRecDataset, self).__init__(path, dataset)
+
+
+@register_dataset("aminer")
+class AminerRecDataset(RecDataset):
+	def __init__(self, data_path="data"):
+		dataset = "aminer"
+		path = osp.join(data_path, dataset)
+		super(AminerRecDataset, self).__init__(path, dataset)
+
+
+@register_dataset("aminer_nearline")
+class AminerNearlineRecDataset(RecDataset):
+	def __init__(self, data_path="data"):
+		dataset = "aminer_nearline"
+		path = osp.join(data_path, dataset)
+		super(AminerNearlineRecDataset, self).__init__(path, dataset)
+
+
+@register_dataset("aminer_v3")
+class Aminer3RecDataset(RecDataset):
+	def __init__(self, data_path="data"):
+		dataset = "aminer_v3"
+		path = osp.join(data_path, dataset)
+		super(Aminer3RecDataset, self).__init__(path, dataset)
+
+
+@register_dataset("aminer_v3_nearline")
+class Aminer3NearlineRecDataset(RecDataset):
+	def __init__(self, data_path="data"):
+		dataset = "aminer_v3_nearline"
+		path = osp.join(data_path, dataset)
+		super(Aminer3NearlineRecDataset, self).__init__(path, dataset)

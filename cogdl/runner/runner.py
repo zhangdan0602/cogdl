@@ -1,4 +1,5 @@
 import copy
+import datetime
 from typing import Optional
 import numpy as np
 from tqdm import tqdm
@@ -28,8 +29,6 @@ def move_to_device(batch, device):
                 x.to(device)
     elif torch.is_tensor(batch) or isinstance(batch, Graph):
         batch = batch.to(device)
-    elif hasattr(batch, "apply_to_device"):
-        batch.apply_to_device(device)
     return batch
 
 
@@ -217,8 +216,8 @@ class Trainer(object):
             else:
                 epoch_iter = range(self.max_epoch)
                 epoch_printer = Printer(print, rank=rank, world_size=self.world_size)
-
             for epoch in epoch_iter:
+                s_t = datetime.datetime.now()
                 print_str_dict = dict()
                 for hook in self.pre_epoch_hooks:
                     hook(self)
@@ -227,16 +226,15 @@ class Trainer(object):
                 dataset_w.train()
                 train_loader = dataset_w.on_train_wrapper()
                 training_loss = self.training_step(model_w, train_loader, optimizers, lr_schedulars, rank)
-
                 print_str_dict["Epoch"] = epoch
                 print_str_dict["TrainLoss"] = training_loss
-
                 val_loader = dataset_w.on_val_wrapper()
                 if val_loader is not None and (epoch % self.eval_step) == 0:
                     # inductive setting ..
                     dataset_w.eval()
                     # do validation in inference device
                     val_result = self.validate(model_w, dataset_w, rank)
+                    print("val_result: ", val_result)
                     if val_result is not None:
                         monitoring = val_result[self.monitor]
                         if compare_fn(monitoring, best_index):
@@ -247,13 +245,19 @@ class Trainer(object):
                             patience += 1
                             if self.early_stopping and patience >= self.patience:
                                 break
-                        print_str_dict["ValMetric"] = monitoring
-
+                        # print_str_dict["ValMetric"] = monitoring
+                        print_str_dict["recall"] = val_result["recall"]
+                        print_str_dict["ndcg"] = val_result["ndcg"]
+                        print_str_dict["precision"] = val_result["precision"]
+                        print_str_dict["hit_ratio"] = val_result["hit_ratio"]
+                        # print_str_dict["val_acc"] = val_result["val_acc"]
                 epoch_printer(print_str_dict)
 
                 for hook in self.after_epoch_hooks:
                     hook(self)
 
+                e_t = datetime.datetime.now()
+                print(" time of a epoch: ", e_t - s_t)
             with torch.no_grad():
                 post_stage_out = model_w.post_stage(stage, dataset_w)
                 dataset_w.post_stage(stage, post_stage_out)
@@ -322,8 +326,9 @@ class Trainer(object):
 
         if self.progress_bar == "iteration":
             train_loader = tqdm(train_loader)
-
+        count=0
         for batch in train_loader:
+            count += 1
             # batch = batch.to(device)
             batch = move_to_device(batch, device)
             loss = model_w.on_train_step(batch)
@@ -338,6 +343,7 @@ class Trainer(object):
                 optimizer.step()
 
             losses.append(loss.item())
+        print("count: ", count)
         if lr_schedulars is not None:
             for lr_schedular in lr_schedulars:
                 lr_schedular.step()
@@ -346,19 +352,55 @@ class Trainer(object):
     @torch.no_grad()
     def val_step(self, model_w, val_loader, device):
         model_w.eval()
-        for batch in val_loader:
+        result = {'precision': 0.,
+                  'recall': 0.,
+                  'ndcg': 0.,
+                  'hit_ratio': 0.,
+                  'val_acc': 0.}
+        for index, batch in enumerate(val_loader):
             # batch = batch.to(device)
             batch = move_to_device(batch, device)
             model_w.on_val_step(batch)
+            out = model_w.collect_notes()
+            # print("index --- valid out: ", index, out)
+            result['precision'] += out['precision']
+            result['recall'] += out['recall']
+            result['ndcg'] += out['ndcg']
+            result['hit_ratio'] += out['hit_ratio']
+            result['val_acc'] += out['val_acc']
+            # print("index --- valid result: ", index, result)
+        model_w.note("precision", result["precision"])
+        model_w.note("recall", result["recall"])
+        model_w.note("ndcg", result["ndcg"])
+        model_w.note("hit_ratio", result["hit_ratio"])
+        model_w.note("val_acc", result["val_acc"])
         return model_w.collect_notes()
 
     @torch.no_grad()
     def test_step(self, model_w, test_loader, device):
         model_w.eval()
-        for batch in test_loader:
+        result = {'precision': 0.,
+                  'recall': 0.,
+                  'ndcg': 0.,
+                  'hit_ratio': 0.,
+                  'val_acc': 0.}
+        for index, batch in enumerate(test_loader):
             # batch = batch.to(device)
             batch = move_to_device(batch, device)
             model_w.on_test_step(batch)
+            out = model_w.collect_notes()
+            # print("test out: ", out)
+            result['precision'] += out['precision']
+            result['recall'] += out['recall']
+            result['ndcg'] += out['ndcg']
+            result['hit_ratio'] += out['hit_ratio']
+            result['val_acc'] += out['val_acc']
+            # print("index --- test result: ", index, result)
+        model_w.note("precision", result["precision"])
+        model_w.note("recall", result["recall"])
+        model_w.note("ndcg", result["ndcg"])
+        model_w.note("hit_ratio", result["hit_ratio"])
+        model_w.note("val_acc", result["val_acc"])
         return model_w.collect_notes()
 
     def distributed_model_proc(self, model_w: ModelWrapper, rank):

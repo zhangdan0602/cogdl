@@ -137,4 +137,10 @@ SUPPORTED_MODELS = {
     "revgat": "cogdl.models.nn.revgcn",
     "revgen": "cogdl.models.nn.revgcn",
     "sage": "cogdl.models.nn.graphsage",
+    "lr_gccf": "cogdl.models.nn.lr_gccf",
+    "ngcf": "cogdl.models.nn.ngcf",
+    "Disentangled_gcf": "cogdl.models.nn.Disentangled_gcf",
+    "dregn-cf": "cogdl.models.nn.dregn-cf",
+    "gcmc": "cogdl.models.nn.gcmc",
+    "agcn": "cogdl.models.nn.agcn",
 }

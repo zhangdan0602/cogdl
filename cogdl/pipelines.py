@@ -17,7 +17,7 @@ from cogdl.tasks import build_task
 from cogdl.datasets import build_dataset_from_name, NodeDataset
 from cogdl.models import build_model
 from cogdl.options import get_default_args
-from cogdl.datasets.rec_data import build_recommendation_data
+from cogdl.datasets.rec_data import read_recommendation_data
 
 
 class Pipeline(object):
@@ -223,7 +223,7 @@ class RecommendationPipepline(Pipeline):
         if "data" in kwargs:
             data = kwargs["data"]
             val_data = test_data = data[-100:, :]
-            data = build_recommendation_data("custom", data, val_data, test_data)
+            data = read_recommendation_data("custom", data, val_data, test_data)
             self.data_path = kwargs.get("data_path", "tmp_data.pt")
             self.batch_size = kwargs.get("batch_size", 128)
             torch.save(data, self.data_path)

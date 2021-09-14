@@ -157,4 +157,8 @@ SUPPORTED_DATASETS = {
     "yelp2018": "cogdl.datasets.rec_data",
     "ali": "cogdl.datasets.rec_data",
     "amazon-rec": "cogdl.datasets.rec_data",
+    "aminer": "cogdl.datasets.rec_data",
+    "aminer_nearline": "cogdl.datasets.rec_data",
+    "aminer_v3": "cogdl.datasets.rec_data",
+    "aminer__v3_nearline": "cogdl.datasets.rec_data",
 }

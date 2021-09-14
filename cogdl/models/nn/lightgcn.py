@@ -59,8 +59,9 @@ class GraphConv(nn.Module):
         for hop in range(self.n_hops):
             interact_mat = (
                 self._sparse_dropout(self.interact_mat, self.edge_dropout_rate) if edge_dropout else self.interact_mat
-            )
-
+            ).cuda()
+            # print("interact_mat: ", interact_mat.device)
+            # print("agg_embed: ", agg_embed.device)
             agg_embed = torch.sparse.mm(interact_mat, agg_embed)
             if mess_dropout:
                 agg_embed = self.dropout(agg_embed)
@@ -82,7 +83,7 @@ class LightGCN(BaseModel):
         parser.add_argument("--mess_dropout_rate", type=float, default=0.1, help="ratio of mess dropout")
         parser.add_argument("--edge_dropout", type=bool, default=False, help="consider edge dropout or not")
         parser.add_argument("--edge_dropout_rate", type=float, default=0.1, help="ratio of edge sampling")
-        parser.add_argument("--ns", type=str, default='mixgcf', help="rns,mixgcf")
+        parser.add_argument("--ns", type=str, default='rns', help="rns,mixgcf")
         parser.add_argument("--K", type=int, default=1, help="number of negative in K-pair loss")
         parser.add_argument("--n_negs", type=int, default=64, help="number of candidate negative")
         parser.add_argument("--pool", type=str, default='mean', help="[concat, mean, sum, final]")
@@ -182,7 +183,9 @@ class LightGCN(BaseModel):
         user = batch["users"]
         pos_item = batch["pos_items"]
         neg_item = batch["neg_items"]  # [batch_size, n_negs * K]
-
+        user = torch.squeeze(user, dim=0)
+        pos_item = torch.squeeze(pos_item, dim=0)
+        neg_item=torch.squeeze(neg_item, dim=0)
         # user_gcn_emb: [n_users, channel]
         # item_gcn_emb: [n_users, channel]
         user_gcn_emb, item_gcn_emb = self.gcn(
@@ -247,20 +250,18 @@ class LightGCN(BaseModel):
         # user_gcn_emb: [batch_size, n_hops+1, channel]
         # pos_gcn_embs: [batch_size, n_hops+1, channel]
         # neg_gcn_embs: [batch_size, K, n_hops+1, channel]
-
         batch_size = user_gcn_emb.shape[0]
 
-        u_e = self.pooling(user_gcn_emb)
-        pos_e = self.pooling(pos_gcn_embs)
+        u_e = self.pooling(user_gcn_emb) # [b, c]
+        pos_e = self.pooling(pos_gcn_embs) # [b, c]
         neg_e = self.pooling(neg_gcn_embs.view(-1, neg_gcn_embs.shape[2], neg_gcn_embs.shape[3])).view(
-            batch_size, self.K, -1
+            batch_size, self.K, -1  # [b*k, n, c] --> [b*k, c] --> [b, k, c]
         )
-
-        pos_scores = torch.sum(torch.mul(u_e, pos_e), axis=1)
-        neg_scores = torch.sum(torch.mul(u_e.unsqueeze(dim=1), neg_e), axis=-1)  # [batch_size, K]
-
+        pos_scores = torch.sum(torch.mul(u_e, pos_e), axis=1) # [b, c] -->[b,] --> [b, ]
+        neg_scores = torch.sum(torch.mul(u_e.unsqueeze(dim=1), neg_e), axis=-1)  # [b, k, c] --> [b, k] --> [batch_size, K]
+        # neg_scores = torch.sum(torch.mul(u_e, neg_e), axis=1)
         mf_loss = torch.mean(torch.log(1 + torch.exp(neg_scores - pos_scores.unsqueeze(dim=1)).sum(dim=1)))
-
+        # mf_loss = torch.mean(torch.log(1 + torch.exp(neg_scores - pos_scores)).sum(dim=1))
         # cul regularizer
         regularize = (
             torch.norm(user_gcn_emb[:, 0, :]) ** 2

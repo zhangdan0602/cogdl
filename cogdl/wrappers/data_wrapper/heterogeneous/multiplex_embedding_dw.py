@@ -8,8 +8,8 @@ class MultiplexEmbeddingDataWrapper(DataWrapper):
 
         self.dataset = dataset
 
-    def train_wrapper(self):
+    def training_wrapper(self):
         return self.dataset.data.train_data
 
     def test_wrapper(self):
-        return self.dataset.data.test_data
+        return self.dataset.data, self.dataset.data.test_data
